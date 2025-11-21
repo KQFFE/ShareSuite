@@ -1,10 +1,10 @@
 {
-    "name": "ShareSuite",
-    "version_number": "1.15.1",
-    "website_url": "https://github.com/FunkFrog/RoR2SharedItems",
-    "description": "Share gear between members of your party - Highly Balanced - Completely Customisable",
+    "name": "ShareSuite_KOFFE_Fix",
+    "version_number": "1.15.2",
+    "website_url": "https://github.com/KQFFE/ShareSuite",
+    "description": "A community fix for ShareSuite to work with the latest version of Risk of Rain 2. All credit for the original mod goes to FunkFrog and Sipondo.",
     "dependencies": [
-        "bbepis-BepInExPack-3.0.0",
-        "tristanmcpherson-R2API-2.3.7"
+        "BepInEx-BepInExPack-5.4.2100",
+        "tristanmcpherson-R2API-4.3.5"
     ]
 }

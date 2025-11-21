@@ -2,7 +2,6 @@ libs
 bin
 .vs
 obj
-*.csproj
 buildreleases
 .idea
 Deps

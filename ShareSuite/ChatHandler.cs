@@ -10,14 +10,12 @@ namespace ShareSuite
     {
         public static void UnHook()
         {
-            On.RoR2.GenericPickupController.SendPickupMessage -= RemoveDefaultPickupMessage;
-            On.RoR2.Chat.SendPlayerConnectedMessage -= SendIntroMessage;
+            On.RoR2.Chat.SendPlayerConnectedMessage -= SendIntroMessage; 
         }
 
         public static void Hook()
         {
-            On.RoR2.GenericPickupController.SendPickupMessage += RemoveDefaultPickupMessage;
-            On.RoR2.Chat.SendPlayerConnectedMessage += SendIntroMessage;
+            On.RoR2.Chat.SendPlayerConnectedMessage += SendIntroMessage; 
         }
 
         // ReSharper disable twice ArrangeTypeMemberModifiers
@@ -58,27 +56,22 @@ namespace ShareSuite
             timer.Start();
         }
 
-        public static void RemoveDefaultPickupMessage(On.RoR2.GenericPickupController.orig_SendPickupMessage orig,
-            CharacterMaster master, PickupIndex pickupIndex)
-        {
-            if (!ShareSuite.RichMessagesEnabled.Value) orig(master, pickupIndex);
-        }
-
-        public static void SendRichPickupMessage(CharacterMaster player, PickupDef pickupDef)
+        public static void SendRichPickupMessage(CharacterMaster player, PickupIndex pickupIndex)
         {
             var body = player.hasBody ? player.GetBody() : null;
+            var pickupDef = PickupCatalog.GetPickupDef(pickupIndex);
 
             if (!GeneralHooks.IsMultiplayer() || body == null || !ShareSuite.RichMessagesEnabled.Value)
             {
-                if (ShareSuite.RichMessagesEnabled.Value) SendPickupMessage(player, pickupDef.pickupIndex);
-
+                // The original SendPickupMessage is gone, we'll just send a simple one if needed.
+                if (ShareSuite.RichMessagesEnabled.Value) SendPickupMessage(player, pickupIndex);
                 return;
             }
 
             var pickupColor = pickupDef.baseColor;
             var pickupName = Language.GetString(pickupDef.nameToken);
             var playerColor = GetPlayerColor(player.playerCharacterMasterController);
-            var itemCount = player.inventory.GetItemCount(pickupDef.itemIndex);
+            var itemCount = player.inventory.GetItemCount(pickupDef.itemIndex); // GetItemCount is fine for display purposes
 
             if (pickupDef.coinValue > 0)
             {
@@ -113,14 +106,12 @@ namespace ShareSuite
 
         public static void SendRichCauldronMessage(CharacterMaster player, PickupIndex index)
         {
-            var body = player.hasBody ? player.GetBody() : null;
+            var body = player.GetBody();
 
             if (!GeneralHooks.IsMultiplayer() ||
                 body == null ||
                 !ShareSuite.RichMessagesEnabled.Value)
             {
-                if (ShareSuite.RichMessagesEnabled.Value) SendPickupMessage(player, index);
-
                 return;
             }
 
@@ -128,7 +119,7 @@ namespace ShareSuite
             var pickupColor = pickupDef.baseColor;
             var pickupName = Language.GetString(pickupDef.nameToken);
             var playerColor = GetPlayerColor(player.playerCharacterMasterController);
-            var itemCount = player.inventory.GetItemCount(pickupDef.itemIndex);
+            var itemCount = player.inventory.GetItemCount(pickupDef.itemIndex); // GetItemCount is fine for display purposes
 
             var pickupMessage =
                 $"<color=#{playerColor}>{body.GetUserName()}</color> <color=#{GrayColor}>traded for</color> " +
@@ -138,7 +129,7 @@ namespace ShareSuite
         }
 
         public static void SendRichRandomizedPickupMessage(CharacterMaster origPlayer, PickupDef origPickup,
-            Dictionary<CharacterMaster, PickupDef> pickupIndices)
+            Dictionary<CharacterMaster, PickupIndex> pickupIndices)
         {
             if (!GeneralHooks.IsMultiplayer() || !ShareSuite.RichMessagesEnabled.Value)
             {
@@ -150,7 +141,7 @@ namespace ShareSuite
             // If nobody got a randomized item
             if (pickupIndices.Count == 1)
             {
-                SendRichPickupMessage(origPlayer, origPickup);
+                SendRichPickupMessage(origPlayer, origPickup.pickupIndex);
                 return;
             }
 
@@ -159,11 +150,12 @@ namespace ShareSuite
 
             foreach (var index in pickupIndices)
             {
-                var pickupColor = index.Value.baseColor;
-                var pickupName = Language.GetString(index.Value.nameToken);
+                var currentPickupDef = PickupCatalog.GetPickupDef(index.Value);
+                var pickupColor = currentPickupDef.baseColor;
+                var pickupName = Language.GetString(currentPickupDef.nameToken);
                 var playerColor = GetPlayerColor(index.Key.playerCharacterMasterController);
                 var itemCount =
-                    index.Key.playerCharacterMasterController.master.inventory.GetItemCount(index.Value.itemIndex);
+                    index.Key.inventory.GetItemCount(currentPickupDef.itemIndex); // GetItemCount is fine for display purposes
 
                 if (remainingPlayers != pickupIndices.Count)
                 {
@@ -271,7 +263,7 @@ namespace ShareSuite
             {
                 var master = playerCharacterMasterController.master;
                 // If they don't have a body or are the one who picked up the item, go to the next person
-                if (!master.inventory || master.GetBody() == body) continue;
+                if (!master.hasBody || master.GetBody() == body) continue;
 
                 // If the player is alive, add one to eligablePlayers
                 if (!master.IsDeadAndOutOfLivesServer() || ShareSuite.DeadPlayersGetItems.Value)
@@ -285,9 +277,11 @@ namespace ShareSuite
 
         public delegate void SendPickupMessageDelegate(CharacterMaster master, PickupIndex pickupIndex);
 
-        public static readonly SendPickupMessageDelegate SendPickupMessage =
-            (SendPickupMessageDelegate) Delegate.CreateDelegate(typeof(SendPickupMessageDelegate),
-                typeof(GenericPickupController).GetMethod("SendPickupMessage",
-                    BindingFlags.Public | BindingFlags.Static) ?? throw new MissingMethodException("Unable to find SendPickupMessage"));
+        public static void SendPickupMessage(CharacterMaster master, PickupIndex pickupIndex) 
+        {
+            var pickupDef = PickupCatalog.GetPickupDef(pickupIndex);
+            var message = new Chat.SubjectFormatChatMessage { subjectAsCharacterBody = master.GetBody(), baseToken = "PLAYER_PICKUP", paramTokens = new[] { pickupDef.nameToken } };
+            Chat.SendBroadcastChat(message);
+        }
     }
 }

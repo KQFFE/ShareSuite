@@ -20,7 +20,7 @@ namespace ShareSuite
         {
             On.RoR2.BossGroup.DropRewards += BossGroup_DropRewards;
             //IL.RoR2.BossGroup.DropRewards += BossGroup_DropRewards;
-            On.RoR2.SceneDirector.PlaceTeleporter += InteractibleCreditOverride;
+            //On.RoR2.SceneDirector.PlaceTeleporter += InteractibleCreditOverride;
             On.RoR2.TeleporterInteraction.OnInteractionBegin += OverrideBossLootScaling;
             On.RoR2.Artifacts.SacrificeArtifactManager.OnPrePopulateSceneServer += SetSacrificeOffset;
             On.RoR2.Util.GetExpAdjustedDropChancePercent += GetExpAdjustedDropChancePercent;
@@ -30,7 +30,7 @@ namespace ShareSuite
         {
             On.RoR2.BossGroup.DropRewards -= BossGroup_DropRewards;
             //IL.RoR2.BossGroup.DropRewards -= BossGroup_DropRewards;
-            On.RoR2.SceneDirector.PlaceTeleporter -= InteractibleCreditOverride;
+            //On.RoR2.SceneDirector.PlaceTeleporter -= InteractibleCreditOverride;
             On.RoR2.TeleporterInteraction.OnInteractionBegin -= OverrideBossLootScaling;
             On.RoR2.Artifacts.SacrificeArtifactManager.OnPrePopulateSceneServer -= SetSacrificeOffset;
             On.RoR2.Util.GetExpAdjustedDropChancePercent -= GetExpAdjustedDropChancePercent;
@@ -92,8 +92,6 @@ namespace ShareSuite
             SceneDirector self)
         {
             orig(self);
-
-            Debug.Log(SceneInfo.instance.sceneDef.nameToken);
 
             #region InteractablesCredit
 

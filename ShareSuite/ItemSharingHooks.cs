@@ -1,5 +1,6 @@
 using System;
 using RoR2;
+using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -17,7 +18,7 @@ namespace ShareSuite
     {
         private static bool _itemLock = false;
 
-        private static readonly List<CostTypeIndex> PrinterCosts = new List<CostTypeIndex>
+        public static readonly List<CostTypeIndex> PrinterCosts = new List<CostTypeIndex>
         {
             CostTypeIndex.WhiteItem,
             CostTypeIndex.GreenItem,
@@ -99,7 +100,7 @@ namespace ShareSuite
             if (scrapperController)
             {
                 var pickupIndex = PickupIndex.none;
-                var itemDef = ItemCatalog.GetItemDef(scrapperController.lastScrappedItemIndex);
+                var itemDef = ItemCatalog.GetItemDef((ItemIndex)GetInstanceField(typeof(ScrapperController), scrapperController, "_lastScrappedItemIndex"));
                 if (itemDef != null)
                 {
                     switch (itemDef.tier)
@@ -132,8 +133,9 @@ namespace ShareSuite
                 SetInstanceField(typeof(ScrappingToIdle), self, "foundValidScrap", true);
                 var component = interactor.GetComponent<CharacterBody>();
                 HandleGiveItem(component.master, pickupDef);
-                ChatHandler.SendRichCauldronMessage(component.inventory.GetComponent<CharacterMaster>(), pickupIndex);
-                scrapperController.itemsEaten -= 1;
+                ChatHandler.SendRichCauldronMessage(component.master, pickupIndex);
+                var itemsEaten = (int)GetInstanceField(typeof(ScrapperController), scrapperController, "_itemsEaten");
+                SetInstanceField(typeof(ScrapperController), scrapperController, "_itemsEaten", itemsEaten - 1);
             }
         }
 
@@ -142,20 +144,20 @@ namespace ShareSuite
         {
             var item = PickupCatalog.GetPickupDef(self.pickupIndex);
             var itemDef = ItemCatalog.GetItemDef(item.itemIndex);
-            var randomizedPlayerDict = new Dictionary<CharacterMaster, PickupDef>();
+            var randomizedPlayerDict = new Dictionary<CharacterMaster, PickupIndex>();
 
             // If the player is dead, they might not have a body. The game uses inventory.GetComponent, avoiding the issue entirely.
             var master = body?.master ?? body.inventory?.GetComponent<CharacterMaster>();
 
             if (!Blacklist.HasItem(item.itemIndex)
                 && NetworkServer.active
-                && IsValidItemPickup(self.pickupIndex)
+                && IsValidItemPickup(item.pickupIndex)
                 && IsValidPickupObject(self, body)
                 && GeneralHooks.IsMultiplayer())
             {
                 if (ShareSuite.RandomizeSharedPickups.Value)
                 {
-                    randomizedPlayerDict.Add(master, item);
+                    randomizedPlayerDict.Add(master, item.pickupIndex);
                 }
 
                 foreach (var player in PlayerCharacterMasterController.instances
@@ -197,7 +199,7 @@ namespace ShareSuite
                         // Legacy -- old normal pickup message handler
                         //SendPickupMessage(player, giveItem);
 
-                        randomizedPlayerDict.Add(player, giveItem);
+                        randomizedPlayerDict.Add(player, giveItem.pickupIndex);
                     }
                     // Otherwise give everyone the same item
                     else
@@ -216,10 +218,10 @@ namespace ShareSuite
 
             orig(self, body);
 
-            ChatHandler.SendRichPickupMessage(master, item);
+            ChatHandler.SendRichPickupMessage(master, self.pickupIndex);
 
             // ReSharper disable once PossibleNullReferenceException
-            HandleRichMessageUnlockAndNotification(master, item.pickupIndex);
+            HandleRichMessageUnlockAndNotification(master, self.pickupIndex);
         }
 
         // Deprecated
@@ -261,7 +263,7 @@ namespace ShareSuite
             //if is not valid drop and dupe fix is enabled, false -> item ISN'T shared, dupe fix should catch, we don't want to pop
 
             if (!GeneralHooks.IsMultiplayer() // is not multiplayer
-                || !IsValidItemPickup(self.CurrentPickupIndex()) && !ShareSuite.PrinterCauldronFixEnabled.Value
+                || !IsValidItemPickup(self.CurrentPickup().pickupIndex) && !ShareSuite.PrinterCauldronFixEnabled.Value
                 //if it's not a valid drop AND the dupe fix isn't enabled
                 || self.itemTier == ItemTier.Lunar
                 || costType == CostTypeIndex.Money
@@ -304,17 +306,18 @@ namespace ShareSuite
                     var inventory = characterBody.inventory;
 
 
-                    var item = PickupCatalog.GetPickupDef(shop.CurrentPickupIndex())?.itemIndex;
+                    var pickupDef = PickupCatalog.GetPickupDef(shop.CurrentPickup().pickupIndex);
+                    var item = pickupDef?.itemIndex;
 
                     if (item == null) MonoBehaviour.print("ShareSuite: PickupCatalog is null.");
                     else
                     {
-                        HandleGiveItem(characterBody.master, PickupCatalog.GetPickupDef(shop.CurrentPickupIndex()));
+                        HandleGiveItem(characterBody.master, pickupDef); // This line is correct
                     }
 
                     orig(self, activator);
-                    ChatHandler.SendRichCauldronMessage(inventory.GetComponent<CharacterMaster>(),
-                        shop.CurrentPickupIndex());
+                    ChatHandler.SendRichCauldronMessage(characterBody.master,
+                        shop.CurrentPickup().pickupIndex);
                     return;
                 }
             }
@@ -327,24 +330,9 @@ namespace ShareSuite
             {
                 if (self.costType == CostTypeIndex.Equipment)
                 {
-                    var rng = self.GetComponent<Xoroshiro128Plus>();
-                    var itemIndex = ItemIndex.None;
-
-                    var costTypeDef = CostTypeCatalog.GetCostTypeDef(self.costType);
-                    if (shop)
-                    {
-                        itemIndex = PickupCatalog.GetPickupDef(shop.CurrentPickupIndex()).itemIndex;
-                    }
-
-                    var payCostResults = costTypeDef.PayCost(self.cost,
-                        activator, self.gameObject, rng, itemIndex);
-
-                    if (payCostResults.equipmentTaken.Count >= 1)
-                    {
-                        orig(self, activator);
-                        EquipmentSharingHooks.RemoveAllUnBlacklistedEquipment();
-                        return;
-                    }
+                    orig(self, activator);
+                    EquipmentSharingHooks.RemoveAllUnBlacklistedEquipment();
+                    return;
                 }
             }
 
@@ -527,7 +515,7 @@ namespace ShareSuite
 
         private static void HandleGiveItem(CharacterMaster characterMaster, PickupDef pickupDef)
         {
-            characterMaster.inventory.GiveItem(pickupDef.itemIndex);
+            characterMaster.inventory.GiveItemPermanent(pickupDef.itemIndex);
 
             var connectionId = characterMaster.playerCharacterMasterController.networkUser?.connectionToClient?.connectionId;
 
@@ -547,7 +535,7 @@ namespace ShareSuite
 
             characterMaster.playerCharacterMasterController?.networkUser?.localUser?.userProfile.DiscoverPickup(pickupIndex);
 
-            if (characterMaster.inventory.GetItemCount(PickupCatalog.GetPickupDef(pickupIndex).itemIndex) <= 1)
+            if (characterMaster.inventory.GetItemCount(PickupCatalog.GetPickupDef(pickupIndex).itemIndex) <= 1) // GetItemCount is fine for display purposes
             {
                 CharacterMasterNotificationQueue.PushPickupNotification(characterMaster, pickupIndex);
             }

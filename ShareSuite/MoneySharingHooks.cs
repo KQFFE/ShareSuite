@@ -129,15 +129,7 @@ namespace ShareSuite
                         // Share the damage taken from a sacrifice
                         // as it generates shared money
                         orig(self, activator);
-                        var teamMaxHealth = 0;
-                        foreach (var playerCharacterMasterController in PlayerCharacterMasterController.instances)
-                        {
-                            var charMaxHealth = playerCharacterMasterController.master.GetBody().maxHealth;
-                            if (charMaxHealth > teamMaxHealth)
-                            {
-                                teamMaxHealth = (int) charMaxHealth;
-                            }
-                        }
+                        var teamMaxHealth = PlayerCharacterMasterController.instances.Select(playerCharacterMasterController => (int)playerCharacterMasterController.master.GetBody().maxHealth).Concat(new[] {0}).Max();
 
                         var purchaseInteraction = self.GetComponent<PurchaseInteraction>();
                         var shrineBloodBehavior = self.GetComponent<ShrineBloodBehavior>();

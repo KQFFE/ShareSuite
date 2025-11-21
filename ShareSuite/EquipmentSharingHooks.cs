@@ -30,15 +30,15 @@ namespace ShareSuite
             }
 
             // Get the old and new equipment's index
-            var oldEquip = body.inventory.currentEquipmentIndex;
+            var oldEquip = body.inventory.GetEquipmentIndex();
             var oldEquipPickupIndex = GetPickupIndex(oldEquip);
             var newEquip = PickupCatalog.GetPickupDef(self.pickupIndex).equipmentIndex;
 
             // Send the pickup message
-            ChatHandler.SendPickupMessage(body.master, self.pickupIndex);
+            ChatHandler.SendRichPickupMessage(body.master, self.pickupIndex);
 
             // Give the equipment to the picker 
-            body.inventory.SetEquipmentIndex(newEquip);
+            body.inventory.SetEquipmentIndex(newEquip, true);
 
             // Destroy the object
             Object.Destroy(self.gameObject);
@@ -71,7 +71,7 @@ namespace ShareSuite
                 .Where(p => p.inventory && p != body.master))
             {
                 var playerInventory = player.inventory;
-                var playerOrigEquipment = playerInventory.currentEquipmentIndex;
+                var playerOrigEquipment = playerInventory.GetEquipmentIndex();
 
                 // If the player currently has an equipment that's blacklisted
                 if (!EquipmentShared(playerOrigEquipment))
@@ -83,15 +83,12 @@ namespace ShareSuite
                     }
 
                     // Create a droplet of their current blacklisted equipment on the ground
-                    var transform = player.GetBodyObject().transform;
-                    var pickupIndex = PickupCatalog.FindPickupIndex(playerOrigEquipment);
-                    PickupDropletController.CreatePickupDroplet(pickupIndex, transform.position,
-                        transform.forward * 20f);
+                    var transform = player.GetBody().transform;
+                    PickupDropletController.CreatePickupDroplet(new UniquePickup { pickupIndex = PickupCatalog.FindPickupIndex(playerOrigEquipment) }, transform.position, transform.forward * 20f);
                 }
 
                 // Give the player the new equipment
-                playerInventory.SetEquipmentIndex(newEquip);
-                self.NetworkpickupIndex = PickupCatalog.FindPickupIndex(newEquip);
+                playerInventory.SetEquipmentIndex(newEquip, true);
 
                 // Sync the equipment if they're playing MUL-T
                 SyncToolbotEquip(player, ref newEquip);
@@ -118,7 +115,7 @@ namespace ShareSuite
         private static PickupIndex GetPickupIndex(EquipmentIndex originalEquip)
         {
             return originalEquip != EquipmentIndex.None
-                ? PickupCatalog.GetPickupDef(PickupCatalog.FindPickupIndex(originalEquip)).pickupIndex
+                ? PickupCatalog.FindPickupIndex(originalEquip)
                 : PickupIndex.none;
         }
 
@@ -127,9 +124,9 @@ namespace ShareSuite
             foreach (var player in PlayerCharacterMasterController.instances.Select(p => p.master)
                 .Where(p => p.inventory))
             {
-                if (!Blacklist.HasEquipment(player.inventory.currentEquipmentIndex))
+                if (!Blacklist.HasEquipment(player.inventory.GetEquipmentIndex()))
                 {
-                    player.inventory.SetEquipmentIndex(EquipmentIndex.None);
+                    player.inventory.SetEquipmentIndex(EquipmentIndex.None, true);
                 }
             }
         }
@@ -137,7 +134,7 @@ namespace ShareSuite
         private static void SetEquipmentIndex(Inventory self, EquipmentIndex newEquipmentIndex, uint slot)
         {
             if (!NetworkServer.active) return;
-            if (self.currentEquipmentIndex == newEquipmentIndex) return;
+            if (self.GetEquipmentIndex() == newEquipmentIndex) return;
             var equipment = self.GetEquipment(0U);
             var charges = equipment.charges;
             if (equipment.equipmentIndex == EquipmentIndex.None) charges = 1;
@@ -155,9 +152,8 @@ namespace ShareSuite
         {
             if (pickupIndex != PickupIndex.none)
             {
-                PickupDropletController.CreatePickupDroplet(pickupIndex, position,
-                    new Vector3(
-                        Random.Range(-200f, 200f), 50f, Random.Range(-200f, 200f)));
+                PickupDropletController.CreatePickupDroplet(new UniquePickup { pickupIndex = pickupIndex }, position, new Vector3(
+                    Random.Range(-200f, 200f), 50f, Random.Range(-200f, 200f)));
             }
         }
 
@@ -165,7 +161,7 @@ namespace ShareSuite
         {
             return PlayerCharacterMasterController.instances.Select(p => p.master)
                 .Where(p => p.inventory && !p.IsDeadAndOutOfLivesServer())
-                .Count(master => master.inventory.currentEquipmentIndex == originalEquip);
+                .Count(master => master.inventory.GetEquipmentIndex() == originalEquip);
         }
 
         /// <summary>
